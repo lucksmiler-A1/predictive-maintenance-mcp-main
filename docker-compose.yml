@@ -1,0 +1,55 @@
+# Docker Compose for HTTPS deployment (e.g. Microsoft Copilot Studio)
+#
+# Usage:
+#   1. Edit Caddyfile: replace mcp.example.com with your domain
+#   2. docker compose up -d
+#   3. Caddy auto-provisions a TLS certificate via Let's Encrypt
+#   4. Connect Copilot Studio to: https://mcp.example.com/sse
+#
+# For local testing (no TLS):
+#   docker compose up mcp-server
+#   → http://localhost:8000/sse
+
+services:
+  mcp-server:
+    build: .
+    restart: unless-stopped
+    environment:
+      - MCP_TRANSPORT=sse
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      # Asset health ledger: ./data is mounted read-only, so the ledger
+      # lives on its own named volume (declared at the bottom).
+      - PMM_LEDGER_DIR=/app/ledger
+    ports:
+      - "8000:8000"   # remove this line when using caddy
+    volumes:
+      - ./data:/app/data:ro
+      - ./resources:/app/resources:ro
+      - ./models:/app/models
+      - ./reports:/app/reports
+      - ledger:/app/ledger
+
+  # Uncomment below for production HTTPS via Caddy
+  # caddy:
+  #   image: caddy:2-alpine
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile:ro
+  #     - caddy_data:/data
+  #     - caddy_config:/config
+  #   depends_on:
+  #     - mcp-server
+
+volumes:
+  # Asset health ledger (PMM_LEDGER_DIR): append-only JSON Lines, one file
+  # per asset. A named volume rather than a bind mount, so the sidecar file
+  # locks behave like a local filesystem and the history survives rebuilds.
+  # Back it up with `docker run --rm -v <project>_ledger:/ledger ...`.
+  ledger:
+  # Uncomment together with the caddy service above
+  # caddy_data:
+  # caddy_config:
